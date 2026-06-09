@@ -1,0 +1,3 @@
+# Only needed if running Spark outside Docker.
+# The bitnami/spark image already includes pyspark.
+pyspark==3.5.0
