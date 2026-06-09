@@ -9,12 +9,15 @@ DELIBERATELY injects anomalies so the Spark detector has something to find:
 Run: python producer/producer.py
 """
 import json
+import os
 import time
 import random
 
 from kafka import KafkaProducer
+from kafka.errors import NoBrokersAvailable
 
-KAFKA_BOOTSTRAP = "localhost:9092"
+# Inside Docker -> "kafka:9094"; on host -> "localhost:9092"
+KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092")
 TOPIC = "security-events"
 
 # A small pool of "normal" internal IPs
@@ -56,11 +59,22 @@ def make_blacklist_event():
     }
 
 
+def make_producer():
+    """Retry until Kafka is reachable (it may still be starting up)."""
+    for attempt in range(1, 31):
+        try:
+            return KafkaProducer(
+                bootstrap_servers=KAFKA_BOOTSTRAP,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+        except NoBrokersAvailable:
+            print(f"[producer] Kafka not ready (attempt {attempt}/30), retrying in 3s...")
+            time.sleep(3)
+    raise RuntimeError(f"Could not connect to Kafka at {KAFKA_BOOTSTRAP} after 30 attempts")
+
+
 def main():
-    producer = KafkaProducer(
-        bootstrap_servers=KAFKA_BOOTSTRAP,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    )
+    producer = make_producer()
     print(f"[producer] sending to topic '{TOPIC}' at {KAFKA_BOOTSTRAP} ... Ctrl+C to stop")
 
     tick = 0

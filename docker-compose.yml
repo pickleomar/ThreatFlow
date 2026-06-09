@@ -29,9 +29,20 @@ services:
       timeout: 10s
       retries: 10
 
-  # ---------- Processing: Spark (official Apache image) ----------
+  # ---------- Source: synthetic event producer ----------
+  producer:
+    build: ./producer
+    container_name: producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: "kafka:9094"
+    restart: unless-stopped
+
+  # ---------- Processing: Spark (custom image, JARs baked in, auto-submits) ----------
   spark:
-    image: apache/spark:3.5.1
+    build: ./spark
     container_name: spark
     user: root
     depends_on:
@@ -39,18 +50,20 @@ services:
         condition: service_healthy
       postgres:
         condition: service_started
+    environment:
+      KAFKA_HOST: "kafka"
+      KAFKA_PORT: "9094"
     volumes:
       - ./spark:/app          # stream_processor.py available at /app
       - ./data:/data          # parquet history written here
-    # Kept alive so we can `docker compose exec spark spark-submit ...`
-    command: ["sleep", "infinity"]
+    restart: unless-stopped
 
   # ---------- Storage: PostgreSQL (live views / alerts) ----------
   postgres:
     image: postgres:16
     container_name: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"   # host:5433 -> container:5432 (avoids clash with local Postgres)
     environment:
       POSTGRES_USER: secu
       POSTGRES_PASSWORD: secret

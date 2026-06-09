@@ -49,6 +49,7 @@ def main():
            .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
            .option("subscribe", TOPIC)
            .option("startingOffsets", "latest")
+           .option("failOnDataLoss", "false")
            .load())
 
     events = (raw
@@ -64,11 +65,11 @@ def main():
         .outputMode("append")
         .start())
 
-    # ---- Detection 1: failed-login bursts per IP per 1-min window ----
+    # ---- Detection 1: failed-login bursts per IP per 30-sec window ----
     fail_alerts = (events
                    .filter(col("action") == "login_fail")
-                   .withWatermark("event_time", "2 minutes")
-                   .groupBy(window(col("event_time"), "1 minute"), col("ip"))
+                   .withWatermark("event_time", "30 seconds")
+                   .groupBy(window(col("event_time"), "30 seconds"), col("ip"))
                    .agg(count("*").alias("count"))
                    .filter(col("count") > FAIL_THRESHOLD)
                    .select(
@@ -94,8 +95,8 @@ def main():
     # ---- Detection 2: any event from a blacklisted IP ----
     bl_alerts = (events
                  .filter(col("ip").isin(BLACKLIST))
-                 .withWatermark("event_time", "2 minutes")
-                 .groupBy(window(col("event_time"), "1 minute"), col("ip"))
+                 .withWatermark("event_time", "30 seconds")
+                 .groupBy(window(col("event_time"), "30 seconds"), col("ip"))
                  .agg(count("*").alias("count"))
                  .select(
                      col("window.start").alias("window_start"),
@@ -114,8 +115,8 @@ def main():
 
     # ---- Counters: events per action per 1-min window (dashboard charts) ----
     counts = (events
-              .withWatermark("event_time", "2 minutes")
-              .groupBy(window(col("event_time"), "1 minute"), col("action"))
+              .withWatermark("event_time", "30 seconds")
+              .groupBy(window(col("event_time"), "30 seconds"), col("action"))
               .agg(count("*").alias("count"))
               .select(
                   col("window.start").alias("window_start"),
