@@ -71,6 +71,7 @@ services:
     volumes:
       - ./spark/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
       - pgdata:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U secu -d securitydb"]
       interval: 10s
@@ -81,17 +82,24 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     container_name: grafana
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: postgres:5432
+      GF_DATABASE_NAME: securitydb
+      GF_DATABASE_USER: secu
+      GF_DATABASE_PASSWORD: secret
     volumes:
-      - ./dashboard/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
-    depends_on:
-      postgres:
-        condition: service_started
+      - ./dashboard/grafana/provisioning:/etc/grafana/provisioning
+      - ./dashboard/grafana/dashboards:/var/lib/grafana/dashboards
+
 
 volumes:
   pgdata:
