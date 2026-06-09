@@ -48,11 +48,9 @@ security-stream-project/
 ├── dashboard/
 │   ├── seed_data.py                # fills Postgres with fake data (dashboard dev)
 │   ├── seed_requirements.txt
-│   ├── dashboard.py                # optional Streamlit alternative
-│   ├── requirements.txt
 │   └── grafana/
-│       ├── PANEL_QUERIES.md        # SQL for every Grafana panel
-│       └── provisioning/           # auto-configures the Postgres datasource
+│       ├── dashboards/             # pre-built dashboard JSONs (auto-provisioned)
+│       └── provisioning/           # auto-configures datasource + dashboards
 ├── data/parquet/                   # raw event archive (runtime)
 └── docs/                           # diagrams, report, slides
 ```
@@ -96,11 +94,9 @@ python dashboard/seed_data.py        # re-run anytime for fresh numbers
 
 # 3. Open Grafana
 #    http://localhost:3000   (login: admin / admin)
-#    The "SecurityDB" Postgres datasource is already configured.
-
-# 4. Build panels using the SQL in:
-#    dashboard/grafana/PANEL_QUERIES.md
-#    Set dashboard time range to "Last 1 hour", auto-refresh 5s.
+#    The Postgres datasource AND the dashboards are already provisioned —
+#    open "Security Dashboard" (and "Connectivity") from the dashboard list.
+#    Set the time range to "Last 30 days" to see the seeded data.
 ```
 
 When the real pipeline is ready: stop seeding, start the producer + Spark.
@@ -113,7 +109,7 @@ The same tables fill with live data and every panel keeps working unchanged.
 | Service   | URL / Port              | Credentials   |
 |-----------|-------------------------|---------------|
 | Grafana   | http://localhost:3000   | admin / admin |
-| Postgres  | localhost:5432          | secu / secret |
+| Postgres  | localhost:5433          | secu / secret |
 | Kafka     | localhost:9092          | —             |
 
 ## Team roles

@@ -63,7 +63,7 @@ services:
     image: postgres:16
     container_name: postgres
     ports:
-      - "5433:5432"   # host:5433 -> container:5432 (avoids clash with local Postgres)
+      - "5433:5432"
     environment:
       POSTGRES_USER: secu
       POSTGRES_PASSWORD: secret
