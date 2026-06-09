@@ -3,46 +3,47 @@
 # Dashboard-only work:  docker compose up -d postgres grafana
 services:
 
-  # ---------- Ingestion: Kafka (KRaft mode, no Zookeeper needed) ----------
+  # ---------- Ingestion: Kafka (KRaft mode, no Zookeeper) ----------
   kafka:
-    image: bitnami/kafka:3.7
+    image: confluentinc/cp-kafka:7.6.1
     container_name: kafka
     ports:
-      - "9092:9092"   # host access (producer, dashboard)
+      - "9092:9092"   # host access (producer)
       - "9094:9094"   # internal access (spark container)
     environment:
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,INTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,INTERNAL://kafka:9094
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092,INTERNAL://kafka:9094"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 10
 
-  # ---------- Processing: Spark ----------
+  # ---------- Processing: Spark (official Apache image) ----------
   spark:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.1
     container_name: spark
+    user: root
     depends_on:
       kafka:
         condition: service_healthy
       postgres:
         condition: service_started
-    environment:
-      - SPARK_MODE=master
     volumes:
       - ./spark:/app          # stream_processor.py available at /app
       - ./data:/data          # parquet history written here
     # Kept alive so we can `docker compose exec spark spark-submit ...`
-    command: tail -f /dev/null
+    command: ["sleep", "infinity"]
 
   # ---------- Storage: PostgreSQL (live views / alerts) ----------
   postgres:
@@ -51,9 +52,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=secu
-      - POSTGRES_PASSWORD=secret
-      - POSTGRES_DB=securitydb
+      POSTGRES_USER: secu
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: securitydb
     volumes:
       - ./spark/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
       - pgdata:/var/lib/postgresql/data
@@ -70,10 +71,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
-      # Auto-provisions the Postgres datasource on startup (no manual clicking)
       - ./dashboard/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     depends_on:
